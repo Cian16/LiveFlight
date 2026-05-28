@@ -10,14 +10,12 @@ export function useFlights() {
 
   const fetchFlights = useCallback(async () => {
     try {
-      // Fetch from our own API route to avoid CORS
       const response = await fetch("/api/flights");
-      
-      if (!response.ok) {
-        throw new Error("Radar synchronization failed");
-      }
-
       const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || `Error ${response.status}`);
+      }
       
       if (data && data.states) {
         const transformedFlights: FlightState[] = data.states.map((s: any[]) => ({
@@ -42,18 +40,21 @@ export function useFlights() {
         
         setFlights(transformedFlights);
         setError(null);
+      } else if (data.warning) {
+        setError(data.warning);
       }
       setLoading(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setError("Radar link unstable. Retrying...");
+      setError(err.message || "Uplink Failed");
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     fetchFlights();
-    const interval = setInterval(fetchFlights, 15000);
+    // Increase interval to 20s for production to be safer with cloud IPs
+    const interval = setInterval(fetchFlights, 20000); 
     return () => clearInterval(interval);
   }, [fetchFlights]);
 

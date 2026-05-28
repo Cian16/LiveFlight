@@ -7,26 +7,34 @@ export async function GET(
   try {
     const { hex } = await params;
     
-    // Fallback to hexdb.io
-    const response = await fetch(`https://hexdb.io/api/v1/aircraft/${hex}`);
+    // Attempt lookup with User-Agent and no-cache for Vercel stability
+    const response = await fetch(`https://hexdb.io/api/v1/aircraft/${hex}`, {
+      headers: { 'User-Agent': 'LiveFlight/1.0' },
+      cache: 'no-store'
+    });
     
     if (!response.ok) {
-      // If hexdb fails, try adsb.lol as a fallback
-      const fallbackResponse = await fetch(`https://api.adsb.lol/v2/hex/${hex}`);
-      const fallbackData = await fallbackResponse.json();
+      // Fallback to adsb.lol
+      const fallbackResponse = await fetch(`https://api.adsb.lol/v2/hex/${hex}`, {
+        headers: { 'User-Agent': 'LiveFlight/1.0' },
+        cache: 'no-store'
+      });
       
-      if (fallbackData && fallbackData.ac && fallbackData.ac.length > 0) {
-        const ac = fallbackData.ac[0];
-        return NextResponse.json({
-          Registration: ac.r || "RESTRICTED",
-          Type: ac.t || "Unknown Type",
-          RegisteredOwners: ac.ownOp || "Private Operator",
-          ICAOTypeCode: ac.t || "---"
-        });
+      if (fallbackResponse.ok) {
+        const fallbackData = await fallbackResponse.json();
+        if (fallbackData && fallbackData.ac && fallbackData.ac.length > 0) {
+          const ac = fallbackData.ac[0];
+          return NextResponse.json({
+            Registration: ac.r || "RESTRICTED",
+            Type: ac.t || "Unknown Type",
+            RegisteredOwners: ac.ownOp || "Private Operator",
+            ICAOTypeCode: ac.t || "---"
+          });
+        }
       }
 
       return NextResponse.json(
-        { error: "Aircraft metadata not found" },
+        { error: "Metadata unavailable" },
         { status: 404 }
       );
     }
@@ -34,7 +42,7 @@ export async function GET(
     const data = await response.json();
     return NextResponse.json(data);
   } catch (error) {
-    console.error("Fetch error:", error);
+    console.error("Metadata Fetch Error:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 }
